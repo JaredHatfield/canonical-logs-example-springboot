@@ -1,4 +1,4 @@
-package com.example.canonicallogs;
+package com.example.canonicallogs.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

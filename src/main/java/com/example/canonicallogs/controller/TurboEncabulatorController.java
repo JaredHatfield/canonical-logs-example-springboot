@@ -1,5 +1,7 @@
-package com.example.canonicallogs;
+package com.example.canonicallogs.controller;
 
+import com.example.canonicallogs.logging.CanonicalLogContext;
+import com.example.canonicallogs.service.TurboEncabulatorService;
 import org.springframework.web.bind.annotation.*;
 
 @RestController

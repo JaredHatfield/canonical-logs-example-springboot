@@ -1,5 +1,6 @@
-package com.example.canonicallogs;
+package com.example.canonicallogs.service;
 
+import com.example.canonicallogs.logging.CanonicalLogContext;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.ThreadLocalRandom;

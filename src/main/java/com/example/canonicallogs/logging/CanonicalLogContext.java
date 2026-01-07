@@ -1,4 +1,4 @@
-package com.example.canonicallogs;
+package com.example.canonicallogs.logging;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.RequestScope;
