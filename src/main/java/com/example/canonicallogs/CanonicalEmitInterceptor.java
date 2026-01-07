@@ -14,6 +14,8 @@ import java.util.Map;
 @Component
 public class CanonicalEmitInterceptor implements HandlerInterceptor {
 
+  private static final int MAX_ERROR_MESSAGE_LENGTH = 500;
+
   private final ObjectProvider<CanonicalLogContext> ctxProvider;
   private final ObjectMapper mapper;
   private final CanonicalLogger canonicalLogger;
@@ -82,6 +84,6 @@ public class CanonicalEmitInterceptor implements HandlerInterceptor {
   private static String safeMessage(String msg) {
     if (msg == null) return null;
     String t = msg.trim();
-    return t.length() > 500 ? t.substring(0, 500) : t;
+    return t.length() > MAX_ERROR_MESSAGE_LENGTH ? t.substring(0, MAX_ERROR_MESSAGE_LENGTH) : t;
   }
 }

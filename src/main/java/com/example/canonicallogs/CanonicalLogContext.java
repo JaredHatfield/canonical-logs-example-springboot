@@ -24,6 +24,13 @@ public class CanonicalLogContext {
 
   public Instant start() { return start; }
 
+  /**
+   * Adds a key-value pair to the canonical log context.
+   * Silently ignores null values to prevent polluting logs with null entries.
+   *
+   * @param key the field name (must not be null)
+   * @param value the field value (ignored if null)
+   */
   public void put(String key, Object value) {
     if (value != null) fields.put(key, value);
   }
