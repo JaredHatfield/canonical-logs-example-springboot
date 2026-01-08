@@ -38,15 +38,9 @@ public class TurboEncabulatorController {
       logCtx.put("user_id", userId);
     }
 
-    // Get request ID from context to pass to background task
-    String requestId = (String) logCtx.snapshot().get("request_id");
-    if (requestId == null) {
-      requestId = "unknown";
-    }
+    service.performChurn(turboId, logCtx);
     
-    service.performChurn(turboId, requestId);
-    
-    return new ChurnResponse("dispatched");
+    return new ChurnResponse("completed");
   }
 
   public record RunResponse(double value) {}

@@ -1,35 +1,31 @@
 package com.example.canonicallogs.service;
 
 import com.example.canonicallogs.logging.CanonicalLogContext;
-import com.example.canonicallogs.logging.CanonicalLogger;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Service
 public class TurboEncabulatorService {
 
-  private final CanonicalLogContext logCtx;
-  private final Executor churnExecutor;
-  private final CanonicalLogger canonicalLogger;
-  private final ObjectMapper objectMapper;
+  private final ObjectProvider<CanonicalLogContext> logCtxProvider;
+  private final ThreadPoolTaskExecutor churnExecutor;
 
-  public TurboEncabulatorService(CanonicalLogContext logCtx,
-                                 @Qualifier("churnExecutor") Executor churnExecutor,
-                                 CanonicalLogger canonicalLogger,
-                                 ObjectMapper objectMapper) {
-    this.logCtx = logCtx;
+  public TurboEncabulatorService(ObjectProvider<CanonicalLogContext> logCtxProvider,
+                                 @Qualifier("churnExecutor") ThreadPoolTaskExecutor churnExecutor) {
+    this.logCtxProvider = logCtxProvider;
     this.churnExecutor = churnExecutor;
-    this.canonicalLogger = canonicalLogger;
-    this.objectMapper = objectMapper;
   }
 
   public double computeRunValue(String turboId) {
+    CanonicalLogContext logCtx = logCtxProvider.getObject();
     long startNs = System.nanoTime();
 
     // Example work: random number generator
@@ -44,31 +40,47 @@ public class TurboEncabulatorService {
     return value;
   }
 
-  public void performChurn(String turboId, String requestId) {
+  public void performChurn(String turboId, CanonicalLogContext context) {
     // Generate random churn time (1-1000ms)
     int churnTimeMs = ThreadLocalRandom.current().nextInt(1, 1001);
     
-    // Dispatch task to executor
-    churnExecutor.execute(() -> {
+    // Capture the current request attributes to propagate to background thread
+    org.springframework.web.context.request.RequestAttributes requestAttributes =
+        org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+    
+    // Submit task to executor and wait for completion
+    Future<?> future = churnExecutor.submit(() -> {
       try {
-        Thread.sleep(churnTimeMs);
-        // Log from background thread with structured logging using ObjectMapper
-        Map<String, Object> logData = new LinkedHashMap<>();
-        logData.put("request_id", requestId);
-        logData.put("turboencabulator.id", turboId);
-        logData.put("churn_time", churnTimeMs);
-        logData.put("thread", Thread.currentThread().getName());
+        // Set request attributes in background thread so scoped beans work
+        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(requestAttributes);
         
-        canonicalLogger.info(objectMapper.writeValueAsString(logData));
+        Thread.sleep(churnTimeMs);
+        // Now we can use the context parameter which should resolve correctly
+        context.put("churn_time", churnTimeMs);
+        context.put("churn_thread", Thread.currentThread().getName());
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
+        context.put("churn_interrupted", true);
       } catch (Exception e) {
-        // Log error but don't break the thread
-        canonicalLogger.info("{\"error\":\"Failed to log churn completion\"}");
+        // Catch any other exception to see what's going wrong
+        context.put("churn_task_error", e.getMessage());
+      } finally {
+        // Clean up request attributes
+        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
       }
     });
     
-    // Log after task dispatch but before it completes
-    logCtx.put("churn_dispatched", true);
+    // Wait for the task to complete so churn_time is included in the canonical log
+    try {
+      future.get(5, TimeUnit.SECONDS); // Wait up to 5 seconds for the task
+    } catch (TimeoutException e) {
+      context.put("churn_error", "timeout");
+    } catch (ExecutionException e) {
+      context.put("churn_error", "execution_failed");
+      context.put("churn_error_message", e.getCause() != null ? e.getCause().getMessage() : e.getMessage());
+    } catch (Exception e) {
+      context.put("churn_error", "failed_to_complete");
+      context.put("churn_error_type", e.getClass().getSimpleName());
+    }
   }
 }

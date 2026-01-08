@@ -34,18 +34,18 @@ class CanonicalLoggingIntegrationTest {
     }
 
     @Test
-    void churnEndpointReturnsDispatchedStatus() throws Exception {
+    void churnEndpointReturnsCompletedStatus() throws Exception {
         mockMvc.perform(post("/v1/turboencabulators/test-789/churn")
                         .header("X-User-Id", "churn-user"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("dispatched"));
+                .andExpect(jsonPath("$.status").value("completed"));
     }
 
     @Test
     void churnEndpointWorksWithoutUserId() throws Exception {
         mockMvc.perform(post("/v1/turboencabulators/test-999/churn"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("dispatched"));
+                .andExpect(jsonPath("$.status").value("completed"));
     }
 
     @Test
