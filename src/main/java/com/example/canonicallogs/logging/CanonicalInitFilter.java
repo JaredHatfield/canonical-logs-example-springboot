@@ -1,5 +1,6 @@
-package com.example.canonicallogs;
+package com.example.canonicallogs.logging;
 
+import com.example.canonicallogs.config.AppRuntimeProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

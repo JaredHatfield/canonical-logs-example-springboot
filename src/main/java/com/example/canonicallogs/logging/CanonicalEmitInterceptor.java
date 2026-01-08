@@ -1,4 +1,4 @@
-package com.example.canonicallogs;
+package com.example.canonicallogs.logging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;

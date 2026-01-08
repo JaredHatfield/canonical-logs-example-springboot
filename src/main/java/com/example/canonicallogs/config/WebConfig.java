@@ -1,5 +1,6 @@
-package com.example.canonicallogs;
+package com.example.canonicallogs.config;
 
+import com.example.canonicallogs.logging.CanonicalEmitInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
