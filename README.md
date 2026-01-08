@@ -32,6 +32,17 @@ In Spring MVC, the cleanest "idiomatic" way to share per-request state across co
 - **TurboEncabulatorController** - Shows how controllers add domain and request context
 - **TurboEncabulatorService** - Shows how services add processing details
 
+#### Available Endpoints
+
+1. **POST /v1/turboencabulators/{id}/runs** - Compute a turboencabulator run value
+   - Demonstrates basic structured logging with request-scoped context
+   
+2. **POST /v1/turboencabulators/{id}/churn** - Dispatch a background churn task
+   - Demonstrates how background tasks executed via an executor pool can contribute to structured logs
+   - The task generates a random sleep time (1-1000ms) and logs it from the background thread
+   - Shows thread-safe handling when multiple tasks are dispatched concurrently
+   - Logs both from the main request thread (churn_dispatched) and background thread (churn_time)
+
 ## Sample Canonical Log Output
 
 ```json
@@ -65,6 +76,16 @@ In Spring MVC, the cleanest "idiomatic" way to share per-request state across co
 - Optional hardening inside one request: `synchronizedMap` plus snapshot copy
 - Uses `ThreadLocalRandom` instead of shared `Random` instance
 
+### Background Task Thread Safety
+
+The `/churn` endpoint demonstrates thread-safe handling of background tasks:
+
+- **Request ID Capture**: The request ID is captured from the request-scoped context before dispatching the task
+- **Executor Pool**: Tasks are submitted to a configured `ThreadPoolTaskExecutor` with proper pooling
+- **Separate Logging**: Background thread logs are independent of the canonical request log
+- **Concurrent Safety**: Multiple concurrent requests can each dispatch tasks without interference
+- **Context Isolation**: Each task receives the necessary context (request ID, turboencabulator ID) as method parameters, avoiding shared mutable state
+
 ## Running the Application
 
 ```bash
@@ -72,6 +93,8 @@ mvn spring-boot:run
 ```
 
 ## Testing the Canonical Logging
+
+### Basic Turboencabulator Run
 
 ```bash
 # Make a request with user ID
@@ -84,7 +107,22 @@ curl -X POST http://localhost:8080/v1/turboencabulators/turbo-789/runs \
   -H "Content-Type: application/json"
 ```
 
-Check the application logs to see the canonical JSON log entries.
+### Churn Endpoint (Background Task)
+
+```bash
+# Dispatch a background churn task with user ID
+curl -X POST http://localhost:8080/v1/turboencabulators/turbo-999/churn \
+  -H "X-User-Id: churn-user" \
+  -H "Content-Type: application/json"
+
+# Dispatch a background churn task without user ID
+curl -X POST http://localhost:8080/v1/turboencabulators/turbo-888/churn \
+  -H "Content-Type: application/json"
+```
+
+Check the application logs to see:
+- The canonical JSON log entry for the main HTTP request (includes `churn_dispatched: true`)
+- A separate log entry from the background thread (includes `churn_time` with the random sleep duration)
 
 ## Running Tests
 
