@@ -29,5 +29,20 @@ public class TurboEncabulatorController {
     return new RunResponse(value);
   }
 
+  @PostMapping("/{id}/churn")
+  public ChurnResponse churn(@PathVariable("id") String turboId,
+                             @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+    logCtx.put("turboencabulator.id", turboId);
+    if (userId != null && !userId.isBlank()) {
+      logCtx.put("user_id", userId);
+    }
+
+    service.performChurn(turboId, logCtx);
+    
+    return new ChurnResponse("completed");
+  }
+
   public record RunResponse(double value) {}
+  public record ChurnResponse(String status) {}
 }

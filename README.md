@@ -32,6 +32,18 @@ In Spring MVC, the cleanest "idiomatic" way to share per-request state across co
 - **TurboEncabulatorController** - Shows how controllers add domain and request context
 - **TurboEncabulatorService** - Shows how services add processing details
 
+#### Available Endpoints
+
+1. **POST /v1/turboencabulators/{id}/runs** - Compute a turboencabulator run value
+   - Demonstrates basic structured logging with request-scoped context
+   
+2. **POST /v1/turboencabulators/{id}/churn** - Execute a background churn task
+   - Demonstrates how background tasks executed via an executor pool can add data to the canonical HTTP request log
+   - The task generates a random sleep time (1-1000ms) and logs the `churn_time` field from the background thread
+   - Shows thread-safe handling of request-scoped beans by propagating RequestAttributes to background threads
+   - The `churn_time` and `churn_thread` fields appear in the same canonical log entry as the HTTP request
+   - Key technique: Passing the `CanonicalLogContext` to background threads by propagating `RequestContextHolder` attributes
+
 ## Sample Canonical Log Output
 
 ```json
@@ -65,6 +77,37 @@ In Spring MVC, the cleanest "idiomatic" way to share per-request state across co
 - Optional hardening inside one request: `synchronizedMap` plus snapshot copy
 - Uses `ThreadLocalRandom` instead of shared `Random` instance
 
+### Background Task Thread Safety with Request-Scoped Beans
+
+The `/churn` endpoint demonstrates thread-safe handling of background tasks that need to access request-scoped beans:
+
+**The Challenge**: Request-scoped beans (like `CanonicalLogContext`) are proxies that resolve to thread-local storage. Background threads in an executor pool don't have access to the HTTP request's thread-local context.
+
+**The Solution**: Propagate `RequestAttributes` from the request thread to background threads using `RequestContextHolder`:
+
+```java
+// In the request thread, capture the request attributes
+RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+
+// In the background thread, set the request attributes
+executor.submit(() -> {
+    RequestContextHolder.setRequestAttributes(requestAttributes);
+    try {
+        // Now request-scoped beans can be accessed via their proxies
+        context.put("churn_time", churnTimeMs);
+    } finally {
+        RequestContextHolder.resetRequestAttributes();
+    }
+});
+```
+
+**Key Benefits**:
+- Background threads can safely access request-scoped beans
+- The same `CanonicalLogContext` instance is shared between request and background threads
+- Thread-safe due to `synchronizedMap` in `CanonicalLogContext`
+- Multiple concurrent requests can each dispatch tasks without interference
+- Clean separation: each request's background tasks only access that request's context
+
 ## Running the Application
 
 ```bash
@@ -72,6 +115,8 @@ mvn spring-boot:run
 ```
 
 ## Testing the Canonical Logging
+
+### Basic Turboencabulator Run
 
 ```bash
 # Make a request with user ID
@@ -84,7 +129,24 @@ curl -X POST http://localhost:8080/v1/turboencabulators/turbo-789/runs \
   -H "Content-Type: application/json"
 ```
 
-Check the application logs to see the canonical JSON log entries.
+### Churn Endpoint (Background Task with Canonical Logging)
+
+```bash
+# Execute a background churn task with user ID
+curl -X POST http://localhost:8080/v1/turboencabulators/turbo-999/churn \
+  -H "X-User-Id: churn-user" \
+  -H "Content-Type: application/json"
+
+# Execute a background churn task without user ID
+curl -X POST http://localhost:8080/v1/turboencabulators/turbo-888/churn \
+  -H "Content-Type: application/json"
+```
+
+Check the application logs to see a **single** canonical JSON log entry for the HTTP request that includes:
+- Standard HTTP request fields (method, path, status, duration, etc.)
+- The `churn_time` field with the random sleep duration (logged from the background thread)
+- The `churn_thread` field showing which executor thread handled the task
+- All in one unified log entry, not separate log records
 
 ## Running Tests
 
