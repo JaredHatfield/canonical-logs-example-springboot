@@ -5,6 +5,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -45,14 +47,17 @@ public class TurboEncabulatorService {
     int churnTimeMs = ThreadLocalRandom.current().nextInt(1, 1001);
     
     // Capture the current request attributes to propagate to background thread
-    org.springframework.web.context.request.RequestAttributes requestAttributes =
-        org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+    RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
+    if (requestAttributes == null) {
+      context.put("churn_error", "no_request_context");
+      return;
+    }
     
     // Submit task to executor and wait for completion
     Future<?> future = churnExecutor.submit(() -> {
       try {
         // Set request attributes in background thread so scoped beans work
-        org.springframework.web.context.request.RequestContextHolder.setRequestAttributes(requestAttributes);
+        RequestContextHolder.setRequestAttributes(requestAttributes);
         
         Thread.sleep(churnTimeMs);
         // Now we can use the context parameter which should resolve correctly
@@ -66,13 +71,13 @@ public class TurboEncabulatorService {
         context.put("churn_task_error", e.getMessage());
       } finally {
         // Clean up request attributes
-        org.springframework.web.context.request.RequestContextHolder.resetRequestAttributes();
+        RequestContextHolder.resetRequestAttributes();
       }
     });
     
     // Wait for the task to complete so churn_time is included in the canonical log
     try {
-      future.get(5, TimeUnit.SECONDS); // Wait up to 5 seconds for the task
+      future.get(2, TimeUnit.SECONDS); // Wait up to 2 seconds for the task
     } catch (TimeoutException e) {
       context.put("churn_error", "timeout");
     } catch (ExecutionException e) {
